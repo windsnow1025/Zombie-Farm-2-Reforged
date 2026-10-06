@@ -7671,10 +7671,10 @@ async function main() {
     // instead, so never let a synthesized contextmenu open the menu there.
     if (isTouchPointer(pressPointerType)) return;
     if (toolWheel) { closeToolWheel(); return; }
-    // Settings → Controls picks what right-click means: the tool menu (default) or
-    // the older reflex of jumping straight back to the Select tool. Read per event
-    // so a change in Settings applies to the very next right-click. A panel standing
-    // over the farm closes first in either mode.
+    // Settings → Controls picks what right-click means: back to the Select tool (the
+    // default, the same drop Escape makes) or the quick-switch tool menu. Read per
+    // event so a change in Settings applies to the very next right-click. A panel
+    // standing over the farm closes first in either mode.
     if (getRightClickMode() === "select") { hud.cancelFromRightClick(); return; }
     if (hud.closeTopOverlay()) return;
     toolWheel = openToolWheel(hud.el, {
