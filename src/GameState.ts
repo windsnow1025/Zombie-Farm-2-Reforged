@@ -17,6 +17,7 @@ import { releasedToGraveyard, trimFallen, type FallenZombie } from "./zombie/mem
 import type { ZombieTeam } from "./zombie/teams";
 import { mergeFarmStats, newFarmStats, type FarmStats } from "./stats";
 import { MAX_TIER, clampTier } from "./raid/dualInvasion";
+import { gameNow } from "./gameClock";
 
 // Levels 1-45 are build-verified from PlayerLevels.plist. Levels 46-50 are NOT in the
 // source — they are reimpl-only content (docs/POST_45_PROGRESSION.md) and their five
@@ -149,7 +150,7 @@ export class GameState {
   // ---- lifetime statistics (the Account menu's Statistics panel) ----
   // A kept tally: nothing here can be recovered from the save after the fact (see
   // stats.ts). Purely cosmetic — no price, gate, reward or unlock reads it.
-  stats: FarmStats = newFarmStats(Date.now());
+  stats: FarmStats = newFarmStats(gameNow());
   // Balances as of the last time the tally was reconciled. Gold and brains move
   // through half a dozen paths — locally through addGold, online through the
   // economy's optimistic apply and the server reconcile that follows it — and the
@@ -552,7 +553,7 @@ export class GameState {
    *  sixty zombies since would otherwise evict them the instant the statue is sold,
    *  which is the opposite of what the sell confirmation promises. They still age
    *  out — just behind the next sixty losses instead of immediately. */
-  releaseFallen(fallen: FallenZombie, at = Date.now()) {
+  releaseFallen(fallen: FallenZombie, at = gameNow()) {
     if (this.fallenZombies.some((z) => z.id === fallen.id)) return;
     this.fallenZombies = trimFallen([...this.fallenZombies, releasedToGraveyard(fallen, at)]);
     this.emit();
@@ -855,7 +856,7 @@ export class GameState {
     const f: Friend = {
       id: nextFriendId(this.friends.map((x) => x.id)),
       name: trimmed,
-      addedAt: Date.now(),
+      addedAt: gameNow(),
       giftsSent: 0,
     };
     this.friends.push(f);
@@ -873,7 +874,7 @@ export class GameState {
   /** Whether a brain can be gifted to this friend right now. */
   canGiftBrain(id: string): boolean {
     const f = this.friends.find((x) => x.id === id);
-    return !!f && canGiftBrain(f, Date.now());
+    return !!f && canGiftBrain(f, gameNow());
   }
   /** Gift one brain to a friend. Free to the player (a social faucet) — offline
    *  there is no recipient account, so the gift is only recorded on the friend.
@@ -882,8 +883,8 @@ export class GameState {
    *  already gifted during the current cooldown. */
   giftBrain(id: string): boolean {
     const f = this.friends.find((x) => x.id === id);
-    if (!f || !canGiftBrain(f, Date.now())) return false;
-    f.lastGiftAt = Date.now();
+    if (!f || !canGiftBrain(f, gameNow())) return false;
+    f.lastGiftAt = gameNow();
     f.giftsSent = (f.giftsSent ?? 0) + 1;
     this.emit();
     return true;

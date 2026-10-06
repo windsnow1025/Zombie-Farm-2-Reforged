@@ -5,6 +5,7 @@ import { activeSaveKey } from "./profiles";
 import { SAVE_VERSION } from "./schema";
 import { MAX_REMEMBERED_FALLEN } from "../zombie/memorial";
 import { mergeFarmStats, newFarmStats } from "../stats";
+import { fastForwardGameClock, restoreGameClockLead } from "../gameClock";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -633,5 +634,36 @@ describe("SaveManager online statistics round trip", () => {
 
     expect(blob.stats.plowed).toBe(0);
     expect(blob.stats.harvested).toEqual({ carrot: 9 });
+  });
+});
+
+describe("SaveManager clock lead", () => {
+  afterEach(() => {
+    restoreGameClockLead(undefined);
+    vi.useRealTimers();
+  });
+
+  it("stamps a local save on the farm's clock and carries the Fast Forward lead only once there is one", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_700_000_000_000);
+    vi.stubGlobal("localStorage", memoryStorage());
+    const manager = new SaveManager(
+      { name: "Tester", ownedFarmerHeads: [], ownedFarmerBodies: [], farmerHeadId: 1, farmerBodyId: 0,
+        ownedPets: [], activePet: null, penPets: [], ownedClimates: [], boostInv: [], storageItemCap: 8,
+        storedItems: [], received: [], raidsCompleted: {}, lastRaidAt: 0, raidAttackOrder: [], friends: [] } as never,
+      { w: 30, h: 30, climate: "grass", serialize: () => [], serializeObjects: () => [] } as never,
+      { tile: { col: 0, row: 0 } } as never,
+      { serialize: () => [], serializePots: () => undefined, isGathered: false } as never,
+      { serialize: () => undefined } as never,
+      new Map(), new Map(), async () => undefined, "local",
+    );
+
+    expect(manager.serialize()).not.toHaveProperty("clockLeadMs");
+    expect(manager.serialize().savedAt).toBe(1_700_000_000_000);
+
+    fastForwardGameClock(3_600_000);
+    const save = manager.serialize();
+    expect(save.clockLeadMs).toBe(3_600_000);
+    expect(save.savedAt).toBe(1_700_000_000_000 + 3_600_000);
   });
 });

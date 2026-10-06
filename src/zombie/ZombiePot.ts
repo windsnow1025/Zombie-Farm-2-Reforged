@@ -31,6 +31,7 @@
 // This class is pure data/logic (no Pixi) so it is unit-testable headlessly. It
 // holds at most one job, mirroring the single in-game Zombie Pot building.
 import { OwnedZombieSave, ZombiePotSave } from "../save/schema";
+import { gameNow } from "../gameClock";
 import { combineMasks } from "./mutations";
 import {
   createCombineRandom, selectCombineSpecies, type CombineGraveUnlock,
@@ -91,10 +92,10 @@ const mixColors = (
 export class ZombiePot {
   private job: ZombiePotSave | null = null;
 
-  // `now` and `rng` are injectable so tests are deterministic; production uses
-  // wall-clock + Math.random.
+  // `now` and `rng` are injectable so tests are deterministic; production uses the
+  // farm's clock (gameClock.ts) + Math.random.
   constructor(
-    private now: () => number = () => Date.now(),
+    private now: () => number = gameNow,
     private rng: () => number = Math.random,
     /** Is this species headless? Injected because the pot carries no catalog, and the
      *  child's body type decides which inherited mutations survive (see combineMasks).

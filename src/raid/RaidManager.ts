@@ -7,6 +7,7 @@
 // ZF.runRaid dev hook and tests — it is not wired to any player-facing control.
 import { GameAssets, zombiePortrait, raidImage, raidRewardImage } from "../assets";
 import { GameState } from "../GameState";
+import { gameNow } from "../gameClock";
 import { abilitySlotUnlocked } from "../lifeForce";
 import { ZombieField } from "../zombie/ZombieField";
 import { OwnedZombie } from "../zombie/types";
@@ -313,8 +314,8 @@ export class RaidManager {
     },
     /** Between-invasions cooldown in ms (playtest-scaled by main.ts). */
     private cooldownMs: number = RAID_COOLDOWN_MS,
-    /** Wall clock, injectable for tests. */
-    private now: () => number = () => Date.now()
+    /** The farm's clock, injectable for tests. */
+    private now: () => number = gameNow
   ) {}
 
   /** Ms left on the between-invasions cooldown (0 = ready). */

@@ -48,6 +48,7 @@ import { requireAuth } from "./net/gate";
 import { getVisitTarget, enterVisit, exitVisit, clearVisitTarget } from "./net/visit";
 import { EconomyClient } from "./net/economy";
 import { epicBossRunToClient, serverTimestampToClient } from "./net/clock";
+import { fastForwardGameClock, gameNow } from "./gameClock";
 import { QuestBus, QuestEvent } from "./quest/events";
 import { objectQuestAliases } from "./quest/objectVariants";
 import { QuestSystem } from "./quest/QuestSystem";
@@ -1262,7 +1263,7 @@ async function main() {
   // and the server-verified raid paths funnel their dead through removeCasualties,
   // and a Memorial Statue is a purely local, cosmetic keepsake either way.
   zombies.onFallen = (units) =>
-    state.recordFallen(units.map((unit) => snapshotFallen(unit, Date.now())));
+    state.recordFallen(units.map((unit) => snapshotFallen(unit, gameNow())));
   zombies.onRevived = (ids) => state.forgetFallen(ids);
   // Selling or shelving a statue must not take its occupant with it.
   field.onMemorialReleased = (fallen) => state.releaseFallen(fallen);
@@ -2360,9 +2361,9 @@ async function main() {
   // queued farm-job pipeline. If frames are merely throttled, each sparse frame
   // advances the missing time; if they stop, the first focus/visible event does.
   // Nothing else (notably raids) receives this elapsed time.
-  let lastJobAdvanceAt = Date.now();
+  let lastJobAdvanceAt = gameNow();
   const advanceFarmJobsToNow = (forceSilent = false) => {
-    const now = Date.now();
+    const now = gameNow();
     const elapsed = (now - lastJobAdvanceAt) / 1000;
     // A throttled/hidden tab can complete several queued jobs in one catch-up.
     // Do that work silently so their independent one-shots do not all burst at once.
@@ -2376,7 +2377,7 @@ async function main() {
   // apply, and a tab frozen through the whole invasion would otherwise hand that same
   // span back a second time on the first frame after the result panel closes.
   const pauseFarmJobs = () => { advanceFarmJobsToNow(); jobs.setPaused(true); };
-  const resumeFarmJobs = () => { advanceFarmJobsToNow(); jobs.setPaused(false); lastJobAdvanceAt = Date.now(); };
+  const resumeFarmJobs = () => { advanceFarmJobsToNow(); jobs.setPaused(false); lastJobAdvanceAt = gameNow(); };
 
   // Visit mode: if a friend farm was requested (via enterVisit → reload), hydrate
   // THEIR read-only save into these fresh singletons and — crucially — never call
@@ -2507,6 +2508,10 @@ async function main() {
     // export above all, since the bootstrap projection had no capacity to project —
     // came back showing eight slots with a McDonnell's Barn standing on it.
     refreshShedCap();
+    // The load restored the save's Fast Forward lead, which moved the clock the job
+    // baseline above was taken from. restorePending has already replayed the span the
+    // save owed, so the first frame must not hand the lead to the queue as elapsed time.
+    lastJobAdvanceAt = gameNow();
     saveManager.enableAutosave();
     // Backfill newly-added presentation fields (such as woodland density) even
     // when an existing player does not immediately change another farm value.
@@ -3914,7 +3919,7 @@ async function main() {
     const mutations = mutationAlmanacEntries(state.mutationDiscovered, { cropName: () => undefined });
     return buildStatsView({
       stats: state.stats,
-      now: Date.now(),
+      now: gameNow(),
       name: state.name,
       level: state.level,
       xp: state.xp,
@@ -4225,7 +4230,7 @@ async function main() {
   };
   hud.getEpicBossView = () => {
     const run = epicRun();
-    const now = Date.now();
+    const now = gameNow();
     const active = epicBoss.isActive(run);
     const shownBosses = visibleEpicBosses(EPIC_BOSSES, active && run ? run.bossId : null);
     return shownBosses.map((def) => {
@@ -4253,7 +4258,7 @@ async function main() {
     const run = epicRun();
     const active = epicBoss.isActive(run);
     quests.setEpicBossActive(active, active ? epicBoss.def.questIds : []);
-    const days = active && run ? Math.max(1, Math.ceil((run.expiresAt - Date.now()) / 86_400_000)) : 0;
+    const days = active && run ? Math.max(1, Math.ceil((run.expiresAt - gameNow()) / 86_400_000)) : 0;
     hud.setBossShortcut(active, days ? `Boss · ${days}d` : "Boss");
   };
   // Runs whose start has already been announced, so the popup fires once per event.
@@ -4494,6 +4499,23 @@ async function main() {
     saveManager.suspend();
     saveManager.clear();
     location.reload();
+  } : null;
+  // Fast Forward (Settings → Game): move the farm's clock ahead. Every timer derives
+  // from an absolute epoch read against gameNow(), so crops, trees, pots, cooldowns
+  // and quest periods need nothing of their own; what the skipped span owes is replayed
+  // the way a backgrounded tab's is. The farmer works through his queue, the crops snap
+  // to their new stage, the boards and the HUD redraw, and the lead is saved so a
+  // reload cannot rewind the farm. Local only: an Online Farm's timers are the server's.
+  hud.onFastForward = playMode === "local" ? (ms) => {
+    advanceFarmJobsToNow(true); // settle the queue on the old clock...
+    fastForwardGameClock(ms);
+    advanceFarmJobsToNow(true); // ...then hand it the whole skipped span, silently
+    field.update(0);
+    periodicQuests.refresh();
+    hud.setPeriodicQuests(periodicQuests.views());
+    syncEpicBossUi();
+    hud.update();
+    saveManager.save();
   } : null;
   // Available in both farm modes — the service worker serves the app shell either way.
   hud.onCheckForUpdate = () => checkForUpdate();
@@ -5196,7 +5218,7 @@ async function main() {
             // The run's five epochs are the SERVER's clock. Translate them here — as
             // every other adopt does — before anything stores or compares them: the
             // event window, the encounter timeout and the retry gate are all read
-            // against Date.now(), and isActive() also gates Boss Token drops. Writing
+            // against gameNow(), and isActive() also gates Boss Token drops. Writing
             // the raw projection back undid the conversion adoptEpicBossResult had
             // just applied, and only the async refresh above ever repaired it.
             // (Non-null: the helper answers null only for a nullish run, and a finish

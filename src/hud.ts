@@ -25,6 +25,7 @@ import type { RaidCardView, RaidPartyView, RaidResultView, RaidLaunchOpts, LootD
 import { lootDropLabel } from "./raid/RaidManager";
 import type { ProfileIndex } from "./save/profiles";
 import { canGiftBrain, type Friend } from "./social/friends";
+import { gameNow } from "./gameClock";
 import { planGiftAll, type GiftAllPlan } from "./social/giftAll";
 import { FRIEND_SORTS, isFriendSort, sortFriends } from "./social/friendSort";
 import {
@@ -1980,6 +1981,9 @@ export class Hud {
   onOpenAnnouncements: (() => void) | null = null;
   onImportLocal: ((raw: string) => boolean) | null = null;
   onResetLocal: (() => void) | null = null;
+  /** Settings' "Fast Forward": move the Local Farm's clock ahead by `ms`. Null on an
+   *  Online Farm, whose timers are the server's (see main.ts). */
+  onFastForward: ((ms: number) => void) | null = null;
   /** Settings' "Check for Updates": poll the service worker on demand. Null where
    *  no service worker can exist (see main.ts / pwa.ts). */
   onCheckForUpdate: (() => Promise<UpdateCheckResult>) | null = null;
@@ -4802,7 +4806,7 @@ export class Hud {
     /** Whether this friend can receive a gift right now. Online the server owns the
      *  window (giftOnCooldown); offline it's the local 24h timer. */
     const canGiftNow = (f: Friend) =>
-      online() ? !f.giftOnCooldown : canGiftBrain(f, Date.now());
+      online() ? !f.giftOnCooldown : canGiftBrain(f, gameNow());
 
     /** Friends who can still receive a gift from me today, in display order. */
     const giftableFriends = () => (this.getFriends?.() ?? []).filter(canGiftNow);
@@ -7172,7 +7176,7 @@ export class Hud {
       return;
     }
     this.cropHoverInfo = info;
-    this.cropHoverShownAt = Date.now();
+    this.cropHoverShownAt = gameNow();
     this.cropHoverX = x;
     this.cropHoverY = y;
     this.renderCropHover();
@@ -7181,7 +7185,7 @@ export class Hud {
   private renderCropHover() {
     const info = this.cropHoverInfo;
     if (!info) return;
-    const remainingMs = Math.max(0, info.remainingMs - (Date.now() - this.cropHoverShownAt));
+    const remainingMs = Math.max(0, info.remainingMs - (gameNow() - this.cropHoverShownAt));
     const ripe = info.ripe || remainingMs <= 0;
     const time = ripe ? "Ready to harvest" : `Time remaining: ${fmtCooldown(remainingMs)}`;
     this.cropHover.replaceChildren();

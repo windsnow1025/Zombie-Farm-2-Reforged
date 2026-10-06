@@ -1,5 +1,6 @@
 import { epicBossHp } from "./catalog";
 import type { EpicBossAttemptResult, EpicBossDef, EpicBossRun } from "./types";
+import { gameNow } from "../gameClock";
 
 export type EpicBossGate =
   | { ok: true; run: EpicBossRun }
@@ -12,7 +13,7 @@ const copy = (run: EpicBossRun): EpicBossRun => ({
 });
 
 export class EpicBossManager {
-  constructor(readonly def: EpicBossDef, private now: () => number = () => Date.now()) {}
+  constructor(readonly def: EpicBossDef, private now: () => number = gameNow) {}
 
   activate(runId: string, attackOrder: string[] = []): EpicBossRun {
     const now = this.now();

@@ -11,6 +11,7 @@
 import { markPrimary, openModal, type ModalHandle } from "../Modal";
 import { UI } from "../uiAsset";
 import type { PeriodicScope, PeriodicScopeView } from "../../quest/periodic/types";
+import { gameNow } from "../../gameClock";
 
 export interface PeriodicQuestPanelView {
   scopes: PeriodicScopeView[];
@@ -122,7 +123,7 @@ function scopeSection(scope: PeriodicScopeView, view: PeriodicQuestPanelView, no
 export function renderPeriodicQuests(
   panel: HTMLElement,
   view: PeriodicQuestPanelView,
-  now = Date.now()
+  now = gameNow()
 ): void {
   panel.querySelector(".pq-list")?.remove();
   const list = document.createElement("div");

@@ -23,6 +23,8 @@ import {
   shellInfo,
   shellUpdateMessage,
 } from "../../shellUpdate";
+import { gameClockLeadMs } from "../../gameClock";
+import { formatPeriodRemaining } from "./periodicQuests";
 
 export async function confirmLocalFarmReset(
   hud: Pick<Hud, "confirmInGame" | "onResetLocal">,
@@ -129,6 +131,15 @@ const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
   { id: "audio", label: "Audio" },
   { id: "display", label: "Display" },
   { id: "controls", label: "Controls" },
+];
+
+/** The spans Settings' Fast Forward offers, sized to the farm's timers: a crop or a
+ *  Zombie Pot is minutes to an hour, the invasion cooldown two hours, a daily board or
+ *  a friend's gift a day. */
+const FAST_FORWARD_STEPS: { name: string; ms: number }[] = [
+  { name: "10 min", ms: 10 * 60_000 },
+  { name: "1 hour", ms: 60 * 60_000 },
+  { name: "1 day", ms: 24 * 60 * 60_000 },
 ];
 
 // Settings modal, split across tabs (see SETTINGS_TABS). The Developer section
@@ -400,6 +411,39 @@ export function openSettings(hud: Hud): void {
       actions,
       noteEl("Clearing browser data can remove Local Farm. Export a backup to keep it safe. Import also accepts an Online Farm export."),
     );
+    // Fast Forward: move the farm's clock ahead by a preset span. Local only, like
+    // Import and Reset: an Online Farm's timers are the server's. The note carries the
+    // lead, so a farm that has been skipped ahead says so.
+    const onFastForward = hud.onFastForward;
+    if (onFastForward) {
+      const fastForward = document.createElement("div");
+      fastForward.className = "set-row";
+      const fastForwardLabel = document.createElement("span");
+      fastForwardLabel.textContent = "Fast Forward";
+      const fastForwardControls = document.createElement("div");
+      fastForwardControls.className = "set-username-controls";
+      const fastForwardNote = noteEl("");
+      const describeFastForward = () => {
+        const lead = gameClockLeadMs();
+        fastForwardNote.textContent =
+          "Moves this farm's clock ahead, so crops, trees, Zombie Pots, the invasion cooldown, Epic Boss events and the daily and weekly boards all see the time pass. It can't be undone."
+          + (lead ? ` The farm is ${formatPeriodRemaining(lead)} ahead of this device.` : "");
+      };
+      for (const step of FAST_FORWARD_STEPS) {
+        const button = document.createElement("button");
+        button.className = "set-action";
+        button.textContent = `+${step.name}`;
+        button.onclick = () => {
+          onFastForward(step.ms);
+          describeFastForward();
+          hud.showToast(`Fast-forwarded ${step.name}.`);
+        };
+        fastForwardControls.append(button);
+      }
+      describeFastForward();
+      fastForward.append(fastForwardLabel, fastForwardControls);
+      localStorageControls.push(fastForward, fastForwardNote);
+    }
   } else {
     // Online Farm export: a one-way copy out to a file. There is no Import here —
     // an Online Farm's progress is the server's, so a file can never be loaded into

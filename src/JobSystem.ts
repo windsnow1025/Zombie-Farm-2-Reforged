@@ -13,6 +13,7 @@ import { QuestBus, QuestEvent } from "./quest/events";
 import { Sfx } from "./audio";
 import { harvestXp, plowXp } from "./farmRewards";
 import type { FarmJobQueueSave, FarmJobSave } from "./save/schema";
+import { gameNow } from "./gameClock";
 
 export type JobKind = "till" | "plant" | "harvest";
 export type JobCurrency = "gold" | "brains";
@@ -65,7 +66,7 @@ export class JobSystem {
   // When the current pause began, so resuming can replay it (see setPaused).
   private pausedAt: number | null = null;
   // While elapsed background time is replayed, actions must use the replay
-  // cursor rather than Date.now(). Otherwise every planting completed by one
+  // cursor rather than gameNow(). Otherwise every planting completed by one
   // catch-up pass receives the same (late) timestamp.
   private replayNow: number | null = null;
 
@@ -183,7 +184,7 @@ export class JobSystem {
     if (kind === "till") this.field.reserveTill(oc, or); // hold the area while queued
     const c = this.field.plotCenterOf(oc, or);
     const diamond = this.makeDiamond(c.x, c.y, PLOT, kind === "till");
-    this.queue.push({ kind, oc, or, cx: c.x, cy: c.y, queuedAt: Date.now(), diamond, bar: null, cfg, pendKey: k });
+    this.queue.push({ kind, oc, or, cx: c.x, cy: c.y, queuedAt: gameNow(), diamond, bar: null, cfg, pendKey: k });
     this.pending.add(k);
     this.onQueueChanged?.();
     return true;
@@ -196,7 +197,7 @@ export class JobSystem {
     const area = this.field.objectHighlightArea(objId);
     const diamond = area ? this.makeDiamond(area.x, area.y, area.tiles) : null;
     this.queue.push({
-      kind: "harvestTree", oc: -1, or: -1, cx: x, cy: y, queuedAt: Date.now(),
+      kind: "harvestTree", oc: -1, or: -1, cx: x, cy: y, queuedAt: gameNow(),
       diamond, bar: null, objId, pendKey: k,
     });
     this.pending.add(k);
@@ -237,7 +238,7 @@ export class JobSystem {
   // farmer mid-job.
   enqueueWalk(x: number, y: number) {
     this.queue.push({
-      kind: "walk", oc: -1, or: -1, cx: x, cy: y, queuedAt: Date.now(), diamond: null, bar: null,
+      kind: "walk", oc: -1, or: -1, cx: x, cy: y, queuedAt: gameNow(), diamond: null, bar: null,
     });
     this.onQueueChanged?.();
   }
@@ -269,7 +270,7 @@ export class JobSystem {
     if (paused === this.paused) return; // nested pauses must not restart the clock
     this.paused = paused;
     if (paused) {
-      this.pausedAt = Date.now();
+      this.pausedAt = gameNow();
       return;
     }
     const since = this.pausedAt;
@@ -277,7 +278,7 @@ export class JobSystem {
     if (since === null) return;
     // Silent: a queue that drains in one pass would otherwise fire every completion
     // one-shot at once, over the victory panel.
-    this.advanceElapsed(Math.max(0, Date.now() - since) / 1000, true);
+    this.advanceElapsed(Math.max(0, gameNow() - since) / 1000, true);
   }
 
   /** Persist action intent, not Pixi animation state. A partially-walked/worked
@@ -329,8 +330,8 @@ export class JobSystem {
       Number.POSITIVE_INFINITY,
     );
     const savedAt = Number.isFinite(oldest) ? oldest
-      : Number.isFinite(save.savedAt) ? save.savedAt : Date.now();
-    this.advanceElapsed(Math.max(0, Date.now() - savedAt) / 1000, true);
+      : Number.isFinite(save.savedAt) ? save.savedAt : gameNow();
+    this.advanceElapsed(Math.max(0, gameNow() - savedAt) / 1000, true);
     return true;
   }
 
@@ -347,7 +348,7 @@ export class JobSystem {
   advanceElapsed(elapsedSec: number, suppressAudio = false) {
     if (this.paused) return;
     let remaining = Number.isFinite(elapsedSec) ? Math.max(0, elapsedSec) : 0;
-    const endAt = Date.now();
+    const endAt = gameNow();
     let cursor = endAt - remaining * 1000;
     const prior = this.audioSuppressed;
     const priorReplayNow = this.replayNow;
@@ -595,7 +596,7 @@ export class JobSystem {
       // the way back in while the server had only just started every timer: the local
       // crop read ripe, the harvest came back `not_grown`, and the next resync snapped
       // every one of those plots back to a fresh timer.
-      const plantedAt = online ? Date.now() : (this.replayNow ?? Date.now());
+      const plantedAt = online ? gameNow() : (this.replayNow ?? gameNow());
       if (funds >= cfg.cost && this.field.plantAt(job.oc, job.or, cfg, plantedAt)) {
         // Garden zombies fertilize a freshly-planted VEGGIE crop (zombie crops sell
         // for nothing, so they're never fertilized). A hit doubles the harvest.

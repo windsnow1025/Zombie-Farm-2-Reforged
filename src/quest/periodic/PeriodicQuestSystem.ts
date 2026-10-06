@@ -38,6 +38,7 @@ import {
   periodicViews, refreshPeriodicState, unlockLevel, xpToNextLevel,
 } from "./generate";
 import { periodEndsAt, periodIndex } from "./periods";
+import { gameNow } from "../../gameClock";
 import {
   emptyPeriodicState, type PeriodicQuestState, type PeriodicScope, type PeriodicScopeState,
   type PeriodicScopeView,
@@ -138,7 +139,7 @@ export class PeriodicQuestSystem {
   /** Roll the sets forward to now. Offline this generates; online it authors any
    *  scope that has become due (a level-up, a rollover) and asks the server for the
    *  same board — the counts and the claims stay the server's. */
-  refresh(now = Date.now()): boolean {
+  refresh(now = gameNow()): boolean {
     if (this.hooks.authoritative) return this.authorDue(now);
     const level = this.gameState.level;
     return refreshPeriodicState(this.state, {
@@ -155,7 +156,7 @@ export class PeriodicQuestSystem {
    *  hand is not this period's. Only once the projection has been adopted, so a board
    *  is never drawn over a server one that has simply not arrived yet. Returns true
    *  when a board was drawn. */
-  private authorDue(now = Date.now()): boolean {
+  private authorDue(now = gameNow()): boolean {
     if (!this.adopted) return false;
     const level = this.gameState.level;
     let drawn = false;
@@ -184,7 +185,7 @@ export class PeriodicQuestSystem {
    *  replaced the local one already or is identical — so there is nothing to do.
    *  Anything else (`below_unlock`: the level crossed optimistically was not real)
    *  means the board drawn here was never earned, and it comes down. */
-  authorRefused(scope: PeriodicScope, error: string, now = Date.now()): void {
+  authorRefused(scope: PeriodicScope, error: string, now = gameNow()): void {
     if (!this.hooks.authoritative || error === "already_authored") return;
     const period = periodIndex(scope, now);
     this.refused[scope] = period;
@@ -237,7 +238,7 @@ export class PeriodicQuestSystem {
     this.hooks.render(this.views());
   }
 
-  views(now = Date.now()): PeriodicScopeView[] {
+  views(now = gameNow()): PeriodicScopeView[] {
     if (this.hooks.authoritative && !this.adopted) return [];
     if (!this.preview) return periodicViews(this.state, now);
     // Preview counts on the bar; the Claim only where the SERVER's count agrees.
@@ -261,7 +262,7 @@ export class PeriodicQuestSystem {
   }
 
   /** When the soonest period rolls over, so the HUD knows when to redraw. */
-  nextRolloverAt(now = Date.now()): number {
+  nextRolloverAt(now = gameNow()): number {
     const ends: number[] = [];
     if (this.state.daily) ends.push(periodEndsAt("daily", now));
     if (this.state.weekly) ends.push(periodEndsAt("weekly", now));

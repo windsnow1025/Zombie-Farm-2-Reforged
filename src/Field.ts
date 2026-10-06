@@ -9,6 +9,7 @@ import {
 } from "./assets";
 import { clampPointToGrid, footprintOrigin, gridToScreen, HH, HW, screenToGrid, TILE_H, TILE_W, tileCenter } from "./iso";
 import { setFootprint, sortLayer } from "./depthSort";
+import { gameNow } from "./gameClock";
 import { makeLight, OBJECT_GLOWS } from "./lighting";
 import { mintObjectId, objectIdFloor } from "./objectIds";
 import { resolveObjectSkin, skinCompatible } from "./objectSkins";
@@ -971,7 +972,7 @@ export class Field {
    *  re-derives age and across save/reload) and the ageMs cache (so same-tick logic
    *  that reads ageMs before the next update() sees the ripe value). */
   private ripenNow(c: Planting) {
-    c.plantedAt = Date.now() - c.cfg.growMs;
+    c.plantedAt = gameNow() - c.cfg.growMs;
     c.ageMs = c.cfg.growMs;
   }
 
@@ -1031,7 +1032,7 @@ export class Field {
   }
 
   // Plant a crop/zombie on a plowed plot. Seeds the soil and shows the seed sprite.
-  plantAt(oc: number, or: number, cfg: CropConfig, plantedAt = Date.now()): boolean {
+  plantAt(oc: number, or: number, cfg: CropConfig, plantedAt = gameNow()): boolean {
     const p = this.plots.get(this.key(oc, or));
     if (!p || p.state !== "plowed" || p.crop) return false;
     this.fit(p.soil, this.assets.soil[SEED_FILE], oc, or, PLOT); // seeded soil
@@ -1165,7 +1166,7 @@ export class Field {
   }
 
   update(dt: number) {
-    const now = Date.now();
+    const now = gameNow();
     for (const p of this.plots.values()) {
       const c = p.crop;
       if (!c) continue;
@@ -1728,7 +1729,7 @@ export class Field {
     turn = normalizeTurn(def, turn);
     const flipped = turnFlip(def, turn);
     if (!this.canPlaceObject(oc, or, def, id, flipped)) return null;
-    const now = Date.now();
+    const now = gameNow();
     const ra = def.growMs ? readyAt ?? now + def.growMs : 0;
     const ready = def.growMs ? now >= ra : false;
     const sprite = new Sprite();
@@ -2005,7 +2006,7 @@ export class Field {
     return {
       name: o.def.name,
       ripe: o.ready,
-      remainingMs: o.ready ? 0 : Math.max(0, o.readyAt - Date.now()),
+      remainingMs: o.ready ? 0 : Math.max(0, o.readyAt - gameNow()),
       fertilized: false,
     };
   }
@@ -2021,7 +2022,7 @@ export class Field {
     const o = this.objects.get(id);
     if (!o || !o.def.harvestValue) return false;
     o.readyAt = readyAt;
-    o.ready = Date.now() >= readyAt;
+    o.ready = gameNow() >= readyAt;
     this.fitObjectSprite(o.sprite, o.def, o.oc, o.or, o.ready, o.flipped, o);
     return true;
   }
@@ -2031,7 +2032,7 @@ export class Field {
     const o = this.objects.get(id);
     if (!o || !o.def.harvestValue || !o.ready) return null;
     o.ready = false;
-    o.readyAt = Date.now() + (o.def.growMs ?? 0);
+    o.readyAt = gameNow() + (o.def.growMs ?? 0);
     this.fitObjectSprite(o.sprite, o.def, o.oc, o.or, false, o.flipped, o);
     return o.def.harvestValue;
   }
@@ -2338,7 +2339,7 @@ export class Field {
       dirt: DIRT_FILE,
       hole: HOLE_FILE,
     };
-    const now = Date.now();
+    const now = gameNow();
     for (const ps of plots) {
       const { oc, or } = ps;
       if (!this.fits(oc, or) || !this.areaFree(oc, or)) continue; // stale/overlapping
@@ -2402,7 +2403,7 @@ export class Field {
       return;
     }
 
-    const now = Date.now();
+    const now = gameNow();
     for (const [key, current] of this.plots) {
       if (current.state !== "planted" || !current.crop) continue;
       const saved = wanted.get(key)!.crop!;

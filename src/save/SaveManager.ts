@@ -18,6 +18,7 @@ import { crumb } from "../breadcrumbs";
 import { epicBossById } from "../epicBoss/catalog";
 import { GAMEPLAY_PROTOCOL } from "../net/protocol";
 import { epicBossRunToClient, serverTimestampToClient } from "../net/clock";
+import { gameClockLeadMs, gameNow, restoreGameClockLead } from "../gameClock";
 import { reconcileTutorialCompletion } from "../tutorial/steps";
 import { backfillDiscovered, sanitizeDiscovered } from "../zombie/almanac";
 import { repairMutationDiscovered, sanitizeMutationDiscovered } from "../zombie/mutationAlmanac";
@@ -187,9 +188,10 @@ export class SaveManager {
     // an account-scoped device journal so a discarded tab can restore and revalidate
     // them against the authoritative farm projection on its next bootstrap.
     const farmJobs = this.jobs?.serializePending();
+    const clockLeadMs = gameClockLeadMs();
     return {
       version: SAVE_VERSION,
-      savedAt: Date.now(),
+      savedAt: gameNow(),
       player: {
         name: this.state.name,
         gold: this.state.gold,
@@ -236,6 +238,7 @@ export class SaveManager {
       fallen: this.state.fallenZombies,
       teams: this.state.zombieTeams,
       stats: this.state.stats,
+      ...(clockLeadMs ? { clockLeadMs } : {}),
       ...(farmJobs ? { farmJobs } : {}),
     };
   }
@@ -739,6 +742,9 @@ export class SaveManager {
   }
 
   private async applySave(data: SaveGame, restoreJobs = true): Promise<void> {
+    // The clock first: everything below derives ages and readiness from gameNow(), and
+    // this save's epochs were written against its lead.
+    restoreGameClockLead(data.clockLeadMs);
     this.loadedFarmBackground = data.farm.background;
     const player = data.player;
     this.state.apply({ name: player.name, gold: player.gold, brains: player.brains, xp: player.xp,
@@ -799,7 +805,7 @@ export class SaveManager {
     // from now — with the one figure that IS recoverable seeded from the raid
     // progress it carries, so a veteran's Statistics panel doesn't open claiming
     // they have never won an invasion.
-    const stats = sanitizeFarmStats(data.stats, Date.now());
+    const stats = sanitizeFarmStats(data.stats, gameNow());
     if (!data.stats) {
       stats.raidsWon = Object.values(this.state.raidsCompleted)
         .reduce((total, wins) => total + Math.max(0, Math.trunc(Number(wins) || 0)), 0);
@@ -834,7 +840,7 @@ export class SaveManager {
     this.zombies.restorePots(data.zombiePots, data.zombiePot);
     const epicRun = this.state.epicBossRun;
     const epicDef = epicBossById(epicRun?.bossId);
-    const epicActive = !!epicRun && !epicRun.completedAt && Date.now() < epicRun.expiresAt;
+    const epicActive = !!epicRun && !epicRun.completedAt && gameNow() < epicRun.expiresAt;
     this.quests.setEpicBossActive(epicActive, epicActive ? epicDef?.questIds ?? [] : []);
     this.quests.restore(data.quests);
     // Offline only — online this is a no-op and the server's projection installs the

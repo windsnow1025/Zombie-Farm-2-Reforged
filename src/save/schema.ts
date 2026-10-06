@@ -79,7 +79,7 @@ export const SETTINGS_KEY = "zf2r.v3.settings";
 export interface SaveGame {
   /** Schema version this blob was written with. */
   version: number;
-  /** Epoch ms the save was written (Date.now()). Used for offline-growth math. */
+  /** Epoch ms the save was written (gameNow()). Used for offline-growth math. */
   savedAt: number;
 
   player: PlayerSave;
@@ -132,6 +132,13 @@ export interface SaveGame {
    *  written before it existed; those start counting from the load, with the one
    *  figure that IS derivable (invasions won) seeded from the raid progress. */
   stats?: FarmStats;
+  /** Fast Forward (Settings → Game): how far the farm's clock runs ahead of the device's,
+   *  in ms. Every epoch in this file is written and read against `gameNow()`, which adds
+   *  this lead, so the save has to carry it: restored without it, those epochs would sit
+   *  in the future and the farm would rewind. Absent = 0, which is every save written
+   *  before the feature existed and every online save (Online Farm's timers are the
+   *  server's; see `src/gameClock.ts`). */
+  clockLeadMs?: number;
 }
 
 /** A zombie that perished and was not revived — what a Memorial Statue remembers.
